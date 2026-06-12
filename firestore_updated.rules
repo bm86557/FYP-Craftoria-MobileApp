@@ -1,0 +1,450 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/admin/credentials) &&
+        get(/databases/$(database)/documents/admin/credentials).data.email == request.auth.token.email;
+    }
+    
+    function isAdminOrModerator() {
+      // Check if user is main admin
+      let isMainAdmin = request.auth != null && 
+        exists(/databases/$(database)/documents/admin/credentials) &&
+        get(/databases/$(database)/documents/admin/credentials).data.email == request.auth.token.email;
+      
+      // Check if user is in admin_users collection
+      let isAdminUser = request.auth != null &&
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+      
+      return isMainAdmin || isAdminUser;
+    }
+    
+    function isSuperAdmin() {
+      // Check if user is main admin
+      let isMainAdmin = request.auth != null && 
+        exists(/databases/$(database)/documents/admin/credentials) &&
+        get(/databases/$(database)/documents/admin/credentials).data.email == request.auth.token.email;
+      
+      // Check if user is super admin in admin_users
+      let isSuperAdminUser = request.auth != null &&
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == 'admin';
+      
+      return isMainAdmin || isSuperAdminUser;
+    }
+    
+    function isVerifiedSeller() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'VERIFIED';
+    }
+    
+    // ============================================
+    // ADMIN COLLECTION (Dashboard Login)
+    // ============================================
+    
+    match /admin/credentials {
+      allow read: if true; // Dashboard login page needs this
+      allow create: if request.auth != null && 
+        !exists(/databases/$(database)/documents/admin/credentials);
+      allow update, delete: if isAdmin();
+    }
+    
+    // ============================================
+    // ADMIN USERS (Dashboard: Admin Management)
+    // ============================================
+    
+    match /admin_users/{adminId} {
+      // Dashboard: Super admins can read all admin users
+      allow read: if isSuperAdmin();
+      
+      // Dashboard: Super admins can create new admins/moderators
+      allow create: if isSuperAdmin() &&
+        request.resource.data.keys().hasAll(['email', 'uid', 'role', 'createdAt', 'createdBy']) &&
+        request.resource.data.role in ['admin', 'moderator'];
+      
+      // Dashboard: Super admins can update admin users
+      allow update: if isSuperAdmin();
+      
+      // Dashboard: Super admins can delete admin users
+      allow delete: if isSuperAdmin();
+    }
+    
+    // ============================================
+    // SYSTEM SETTINGS (Dashboard: Admin Configure | App: Read)
+    // ============================================
+    
+    match /system_settings/{settingId} {
+      // App: Anyone can read settings (for commission calculation)
+      allow read: if true;
+      
+      // Dashboard: Only super admins can update settings
+      allow write: if isSuperAdmin();
+    }
+    
+    // ============================================
+    // REPORTS (App: Users Report | Dashboard: Admin Manage)
+    // ============================================
+    
+    match /reports/{reportId} {
+      // App: Any authenticated user can create a report
+      allow create: if request.auth != null &&
+        request.resource.data.reportedBy == request.auth.uid;
+      
+      // App: Users can read their own reports
+      // Dashboard: Admin/Moderator can read all reports
+      allow read: if isAdminOrModerator() || 
+        (request.auth != null && resource.data.reportedBy == request.auth.uid);
+      
+      // Dashboard: Admin/Moderator can update/delete reports
+      allow update, delete: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // COMPLAINTS (App: Users Complain | Dashboard: Admin Manage)
+    // ============================================
+    
+    match /complaints/{complaintId} {
+      // App: Any authenticated user can create a complaint
+      allow create: if request.auth != null &&
+        request.resource.data.complainantId == request.auth.uid;
+      
+      // App: Users can read their own complaints
+      // Dashboard: Admin/Moderator can read all complaints
+      allow read: if isAdminOrModerator() || 
+        (request.auth != null && resource.data.complainantId == request.auth.uid);
+      
+      // Dashboard: Admin/Moderator can update/delete complaints
+      allow update, delete: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // ORDERS (App: Buyers/Sellers | Dashboard: Admin)
+    // ============================================
+    
+    match /orders/{orderId} {
+      // App: Buyers and sellers can read their orders
+      // Dashboard: Admin/Moderator can read all orders
+      allow read: if isAdminOrModerator() || 
+        (request.auth != null && 
+          (resource.data.buyerId == request.auth.uid || 
+           resource.data.sellerId == request.auth.uid));
+      
+      // App: Users can create orders
+      allow create: if request.auth != null;
+      
+      // App: Buyers/sellers can update their orders (cancel, etc.)
+      // Dashboard: Admin/Moderator can update any order
+      allow update: if isAdminOrModerator() || 
+        (request.auth != null && 
+          (resource.data.buyerId == request.auth.uid || 
+           resource.data.sellerId == request.auth.uid));
+      
+      // Dashboard: Only admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // STRIPE REFUND TRACKING (App: System | Dashboard: Admin)
+    // ============================================
+    
+    match /stripe_refund_tracking/{paymentIntentId} {
+      allow read: if isAdminOrModerator() || request.auth != null;
+      allow write: if request.auth != null; // App needs to write during refunds
+    }
+    
+    // ============================================
+    // PRODUCTS (App: Browse/Sell | Dashboard: Admin Approve)
+    // ============================================
+    
+    match /data/stock/products/{productId} {
+      // App: Public can browse products
+      allow read: if true;
+      
+      // App: Verified sellers can create products
+      allow create: if request.auth != null && isVerifiedSeller() &&
+        request.auth.uid == request.resource.data.sellerId;
+      
+      // App: Sellers can update their own products
+      // Dashboard: Admin/Moderator can approve/reject/update any product
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null && isVerifiedSeller() &&
+         request.auth.uid == resource.data.sellerId);
+      
+      // App: Sellers can delete their products
+      // Dashboard: Admin/Moderator can delete any product
+      allow delete: if isAdminOrModerator() || 
+        (request.auth != null && request.auth.uid == resource.data.sellerId);
+    }
+    
+    // ============================================
+    // USERS (App: Profiles | Dashboard: Admin Manage)
+    // ============================================
+    
+    match /users/{userId} {
+      // App: Public can view profiles
+      // Dashboard: Admin/Moderator can view all users
+      allow read: if true;
+      
+      // App: Users can create their profile on signup
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // App: Users can update their own profile
+      // Dashboard: Admin/Moderator can update any user (verification, etc.)
+      allow update: if isAdminOrModerator() || 
+        (request.auth != null && request.auth.uid == userId);
+      
+      // Dashboard: Only admin can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WALLET TRANSACTIONS (App: Own | Dashboard: Admin All)
+    // ============================================
+    
+    match /wallet_transactions/{transactionId} {
+      // App: Users can read their own transactions
+      // Dashboard: Admin/Moderator can read all transactions
+      allow read: if isAdminOrModerator() || 
+        (request.auth != null && resource.data.userId == request.auth.uid);
+      
+      // App: System creates transactions
+      allow create: if request.auth != null;
+      
+      // Dashboard: Admin can update/delete
+      allow update, delete: if isAdmin();
+    }
+    
+    // ============================================
+    // CATEGORIES (App: Browse | Dashboard: Admin Manage)
+    // ============================================
+    
+    match /data/categories/{categoryId} {
+      // App: Public can browse categories
+      allow read: if true;
+      
+      // Dashboard: Admin/Moderator can manage categories
+      allow write: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // LEARNING RESOURCES (App: Sellers View | Dashboard: Admin Manage)
+    // ============================================
+    
+    match /learning_resources_categories/{categoryId} {
+      // App: Sellers can view learning resources
+      allow read: if true;
+      
+      // Dashboard: Admin/Moderator can add/edit/delete
+      allow write: if isAdminOrModerator();
+    }
+    
+    match /learning_resources_tutorials/{tutorialId} {
+      // App: Sellers can view tutorials
+      allow read: if true;
+      
+      // Dashboard: Admin/Moderator can add/edit/delete
+      allow write: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // CO-SELLER STORES (App: Sellers Manage | Dashboard: Admin View)
+    // ============================================
+    
+    match /coSellerStores/{storeId} {
+      // App: Public can browse stores
+      allow read: if true;
+      
+      // App: Verified sellers can create stores
+      allow create: if request.auth != null && isVerifiedSeller() &&
+        request.auth.uid == request.resource.data.ownerSellerId;
+      
+      // App: Owner and co-sellers can update
+      // Dashboard: Admin/Moderator can update any store
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null && isVerifiedSeller() &&
+          (request.auth.uid == resource.data.ownerSellerId ||
+           (resource.data.keys().hasAny(['coSellerIds']) && 
+            request.auth.uid in resource.data.coSellerIds)));
+      
+      // App: Owner can delete their store
+      // Dashboard: Admin can delete any store
+      allow delete: if isAdmin() ||
+        (request.auth != null && request.auth.uid == resource.data.ownerSellerId);
+    }
+    
+    // ============================================
+    // STORE INVITES (App: Sellers | Dashboard: Admin View)
+    // ============================================
+    
+    match /storeInvites/{inviteId} {
+      // App: Involved sellers can read invites
+      // Dashboard: Admin/Moderator can read all invites
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.ownerSellerId == request.auth.uid ||
+           resource.data.invitedSellerId == request.auth.uid));
+      
+      // App: Sellers can create invites
+      allow create: if request.auth != null && isVerifiedSeller() &&
+        request.auth.uid == request.resource.data.ownerSellerId;
+      
+      // App: Involved sellers can accept/reject
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (request.auth.uid == resource.data.invitedSellerId ||
+           request.auth.uid == resource.data.ownerSellerId));
+      
+      // App: Owner can delete invite
+      // Dashboard: Admin can delete any invite
+      allow delete: if isAdmin() ||
+        (request.auth != null &&
+         request.auth.uid == resource.data.ownerSellerId);
+    }
+    
+    // ============================================
+    // CHATS (App: Buyer/Seller | Dashboard: Admin View)
+    // ============================================
+    
+    match /chats/{chatId} {
+      // App: Buyer and seller can read their chat
+      // Dashboard: Admin/Moderator can read all chats
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      
+      // App: Users can create chats
+      allow create: if request.auth != null;
+      
+      // App: Participants can update chat
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      
+      // Dashboard: Only admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    match /chats/{chatId}/messages/{messageId} {
+      // App: Chat participants can read messages
+      // Dashboard: Admin/Moderator can read all messages
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null &&
+         exists(/databases/$(database)/documents/chats/$(chatId)) &&
+          (get(/databases/$(database)/documents/chats/$(chatId)).data.buyerId == request.auth.uid ||
+           get(/databases/$(database)/documents/chats/$(chatId)).data.sellerId == request.auth.uid));
+      
+      // App: Users can send messages
+      allow create: if request.auth != null &&
+        request.resource.data.senderId == request.auth.uid;
+      
+      // Dashboard: Only admin can update/delete
+      allow update, delete: if isAdmin();
+    }
+    
+    // ============================================
+    // VERIFICATION REQUESTS (App: Sellers | Dashboard: Admin Approve)
+    // ============================================
+    
+    match /verificationRequests/{requestId} {
+      // App: Sellers can read their own requests
+      // Dashboard: Admin/Moderator can read all requests
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null && resource.data.userId == request.auth.uid);
+      
+      // App: Sellers can create verification requests
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      
+      // App: Sellers can update their requests
+      // Dashboard: Admin/Moderator can approve/reject
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null && resource.data.userId == request.auth.uid);
+      
+      // Dashboard: Only admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // NEGOTIATION REQUESTS (App: Buyer/Seller | Dashboard: Admin View)
+    // ============================================
+    
+    match /negotiationRequests/{requestId} {
+      // App: Buyer and seller can read
+      // Dashboard: Admin/Moderator can read all
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      
+      // App: Users can create negotiation requests
+      allow create: if request.auth != null;
+      
+      // App: Involved parties can update
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      
+      // Dashboard: Admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    match /negotiation_requests/{requestId} {
+      allow read: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      allow create: if request.auth != null;
+      allow update: if isAdminOrModerator() ||
+        (request.auth != null &&
+          (resource.data.buyerId == request.auth.uid ||
+           resource.data.sellerId == request.auth.uid));
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // FAVOURITES (App Only)
+    // ============================================
+    
+    match /users/{userId}/favourites/{productId} {
+      // App: Users can manage their own favourites
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // ============================================
+    // COMMISSIONS (Dashboard Only)
+    // ============================================
+    
+    match /commissions/{commissionId} {
+      // Dashboard: Admin/Moderator can view/manage commissions
+      allow read, write: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // ANALYTICS (Dashboard Only)
+    // ============================================
+    
+    match /analytics/{document=**} {
+      // Dashboard: Admin/Moderator can view analytics
+      allow read, write: if isAdminOrModerator();
+    }
+    
+    // ============================================
+    // FALLBACK
+    // ============================================
+    
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

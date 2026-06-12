@@ -1,0 +1,234 @@
+/* Product Approval Page Styles */
+
+.container {
+  min-height: 100vh;
+  background-color: #f9fafb;
+  padding: 1.5rem;
+}
+
+.header {
+  max-width: 80rem;
+  margin: 0 auto 2rem;
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: #6b7280;
+}
+
+.filterSection {
+  max-width: 80rem;
+  margin: 0 auto 1.5rem;
+}
+
+.filterCard {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+}
+
+.filterContent {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.filterButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filterButton {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filterButton.active {
+  background-color: #2563eb;
+  color: white;
+}
+
+.filterButton.inactive {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.filterButton.inactive:hover {
+  background-color: #e5e7eb;
+}
+
+.badge {
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.statsSection {
+  max-width: 80rem;
+  margin: 0 auto 1.5rem;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.statCard {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.statCard.total {
+  background-color: white;
+}
+
+.statCard.pending {
+  background-color: #fef3c7;
+}
+
+.statCard.approved {
+  background-color: #d1fae5;
+}
+
+.statCard.rejected {
+  background-color: #fee2e2;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.statCard.total .statLabel {
+  color: #6b7280;
+}
+
+.statCard.pending .statLabel {
+  color: #92400e;
+}
+
+.statCard.approved .statLabel {
+  color: #065f46;
+}
+
+.statCard.rejected .statLabel {
+  color: #991b1b;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.statCard.total .statValue {
+  color: #111827;
+}
+
+.statCard.pending .statValue {
+  color: #78350f;
+}
+
+.statCard.approved .statValue {
+  color: #064e3b;
+}
+
+.statCard.rejected .statValue {
+  color: #7f1d1d;
+}
+
+.productsSection {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.emptyState {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  padding: 3rem;
+  text-align: center;
+}
+
+.emptyText {
+  color: #9ca3af;
+  font-size: 1.125rem;
+}
+
+.productsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .filterContent {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .productsGrid {
+    grid-template-columns: 1fr;
+  }
+}

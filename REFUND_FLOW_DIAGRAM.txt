@@ -1,0 +1,224 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    STRIPE REFUND TRACKING SYSTEM                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: CHECKOUT - Create Orders with Stripe Payment                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Buyer pays Rs. 800 via Stripe
+           ↓
+    PaymentIntent: pi_12345
+           ↓
+    ┌──────────────────────────────────────┐
+    │ Create Refund Tracking Document      │
+    │                                      │
+    │ stripe_refund_tracking/pi_12345:     │
+    │   totalPaid: 800                     │
+    │   totalRefunded: 0                   │
+    │   refundedOrders: []                 │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ Create Orders                        │
+    │                                      │
+    │ Order 1 (Seller A): Rs. 500          │
+    │   stripePaymentIntentId: pi_12345    │
+    │                                      │
+    │ Order 2 (Seller B): Rs. 300          │
+    │   stripePaymentIntentId: pi_12345    │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: REFUND ORDER 1 - Buyer Cancels Order 1                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Buyer cancels Order 1 (Rs. 500)
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CHECK TRACKING (Transaction)         │
+    │                                      │
+    │ ✓ Order 1 not in refundedOrders      │
+    │ ✓ Remaining: 800 - 0 = 800           │
+    │ ✓ Can refund Rs. 500                 │
+    │                                      │
+    │ UPDATE TRACKING:                     │
+    │   totalRefunded: 500                 │
+    │   refundedOrders: ["order1"]         │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CALL STRIPE API                      │
+    │                                      │
+    │ POST /refund-payment                 │
+    │   paymentIntentId: pi_12345          │
+    │   amount: 500                        │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ✅ SUCCESS                            │
+    │                                      │
+    │ Order 1 Status: REFUNDED             │
+    │ Buyer gets Rs. 500 back              │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: REFUND ORDER 2 - Buyer Cancels Order 2                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Buyer cancels Order 2 (Rs. 300)
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CHECK TRACKING (Transaction)         │
+    │                                      │
+    │ ✓ Order 2 not in refundedOrders      │
+    │ ✓ Remaining: 800 - 500 = 300         │
+    │ ✓ Can refund Rs. 300                 │
+    │                                      │
+    │ UPDATE TRACKING:                     │
+    │   totalRefunded: 800                 │
+    │   refundedOrders: ["order1","order2"]│
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CALL STRIPE API                      │
+    │                                      │
+    │ POST /refund-payment                 │
+    │   paymentIntentId: pi_12345          │
+    │   amount: 300                        │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ✅ SUCCESS                            │
+    │                                      │
+    │ Order 2 Status: REFUNDED             │
+    │ Buyer gets Rs. 300 back              │
+    │ Total refunded: Rs. 800              │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO 4: PREVENT DOUBLE REFUND                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Buyer tries to cancel Order 1 AGAIN
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CHECK TRACKING (Transaction)         │
+    │                                      │
+    │ ✗ Order 1 already in refundedOrders  │
+    │                                      │
+    │ THROW EXCEPTION:                     │
+    │ "Order already refunded"             │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ❌ REFUND BLOCKED                     │
+    │                                      │
+    │ Error shown to user                  │
+    │ No Stripe API call made              │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO 5: PREVENT OVER-REFUND                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Someone tries to refund Rs. 100 more
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CHECK TRACKING (Transaction)         │
+    │                                      │
+    │ ✗ Remaining: 800 - 800 = 0           │
+    │ ✗ Cannot refund Rs. 100              │
+    │                                      │
+    │ THROW EXCEPTION:                     │
+    │ "Insufficient refundable amount"     │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ❌ REFUND BLOCKED                     │
+    │                                      │
+    │ Error shown to user                  │
+    │ No Stripe API call made              │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SCENARIO 6: ROLLBACK ON STRIPE FAILURE                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Buyer cancels Order 3 (Rs. 200)
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CHECK TRACKING (Transaction)         │
+    │                                      │
+    │ ✓ All checks pass                    │
+    │                                      │
+    │ UPDATE TRACKING:                     │
+    │   totalRefunded: 200                 │
+    │   refundedOrders: ["order3"]         │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ CALL STRIPE API                      │
+    │                                      │
+    │ ❌ Network Error / API Failure       │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ROLLBACK TRACKING                    │
+    │                                      │
+    │ UPDATE TRACKING:                     │
+    │   totalRefunded: 0                   │
+    │   refundedOrders: []                 │
+    └──────────────────────────────────────┘
+           ↓
+    ┌──────────────────────────────────────┐
+    │ ❌ REFUND FAILED                      │
+    │                                      │
+    │ Error shown to user                  │
+    │ Can retry later                      │
+    └──────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           KEY BENEFITS                                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+✅ Prevents double refunds
+✅ Prevents over-refunding
+✅ Atomic operations (Firestore transactions)
+✅ Automatic rollback on failure
+✅ Works with concurrent refunds
+✅ No manual intervention needed
+✅ Backward compatible (creates tracking on first refund)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      FIRESTORE STRUCTURE                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+stripe_refund_tracking/
+  └─ pi_12345/
+       ├─ paymentIntentId: "pi_12345"
+       ├─ totalPaid: 800.0
+       ├─ totalRefunded: 800.0
+       ├─ refundedOrders: ["order1", "order2"]
+       ├─ createdAt: Timestamp
+       └─ lastRefundedAt: Timestamp
+
+orders/
+  ├─ order1/
+  │    ├─ stripePaymentIntentId: "pi_12345"
+  │    ├─ totalAmountPKR: 500
+  │    ├─ refundStatus: "PROCESSED"
+  │    └─ refundedAmount: 500
+  │
+  └─ order2/
+       ├─ stripePaymentIntentId: "pi_12345"
+       ├─ totalAmountPKR: 300
+       ├─ refundStatus: "PROCESSED"
+       └─ refundedAmount: 300

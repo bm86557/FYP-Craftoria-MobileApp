@@ -1,0 +1,587 @@
+===========================================
+COMPLETE DASHBOARD CODE - CSS MODULES
+===========================================
+
+Ye file mein sab code ek jagah hai.
+Har file ka code copy karke apne project mein paste karo.
+
+===========================================
+FILE 1: pages/products/approval.jsx
+===========================================
+
+import { useState, useEffect } from 'react';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  updateDoc,
+  orderBy,
+  Timestamp 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import ProductApprovalCard from '@/components/ProductApprovalCard';
+import RejectDialog from '@/components/RejectDialog';
+import styles from '@/styles/ProductApproval.module.css';
+
+export default function ProductApprovalPage() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('pending');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const productsRef = collection(db, 'data', 'stock', 'products');
+      
+      let q;
+      if (filter === 'all') {
+        q = query(productsRef, orderBy('createdAt', 'desc'));
+      } else {
+        q = query(
+          productsRef, 
+          where('status', '==', filter),
+          orderBy('createdAt', 'desc')
+        );
+      }
+      
+      const snapshot = await getDocs(q);
+      const productsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setProducts(productsList);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      alert('Failed to fetch products: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, [filter]);
+
+  const handleApprove = async (productId) => {
+    if (!confirm('Are you sure you want to approve this product?')) return;
+    
+    setProcessing(true);
+    try {
+      const productRef = doc(db, 'data', 'stock', 'products', productId);
+      await updateDoc(productRef, {
+        status: 'approved',
+        rejectionReason: null,
+        reviewedBy: 'admin',
+        reviewedAt: Timestamp.now()
+      });
+      
+      alert('Product approved successfully!');
+      fetchProducts();
+    } catch (error) {
+      console.error('Error approving product:', error);
+      alert('Failed to approve product: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReject = (product) => {
+    setSelectedProduct(product);
+    setShowRejectDialog(true);
+  };
+
+  const confirmReject = async (reason) => {
+    if (!selectedProduct) return;
+    
+    setProcessing(true);
+    try {
+      const productRef = doc(db, 'data', 'stock', 'products', selectedProduct.id);
+      await updateDoc(productRef, {
+        status: 'rejected',
+        rejectionReason: reason,
+        reviewedBy: 'admin',
+        reviewedAt: Timestamp.now()
+      });
+      
+      alert('Product rejected successfully!');
+      setShowRejectDialog(false);
+      setSelectedProduct(null);
+      fetchProducts();
+    } catch (error) {
+      console.error('Error rejecting product:', error);
+      alert('Failed to reject product: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const getProductCount = (status) => {
+    return products.filter(p => p.status === status).length;
+  };
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Product Approval</h1>
+        <p className={styles.subtitle}>
+          Review and approve/reject products uploaded by sellers
+        </p>
+      </div>
+
+      <div className={styles.filterSection}>
+        <div className={styles.filterCard}>
+          <div className={styles.filterContent}>
+            <span className={styles.filterLabel}>Filter:</span>
+            <div className={styles.filterButtons}>
+              {['pending', 'approved', 'rejected', 'all'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={`${styles.filterButton} ${
+                    filter === status ? styles.active : styles.inactive
+                  }`}
+                >
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status !== 'all' && (
+                    <span className={styles.badge}>
+                      {getProductCount(status)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.statsSection}>
+        <div className={styles.statsGrid}>
+          <div className={`${styles.statCard} ${styles.total}`}>
+            <div className={styles.statLabel}>Total Products</div>
+            <div className={styles.statValue}>{products.length}</div>
+          </div>
+          <div className={`${styles.statCard} ${styles.pending}`}>
+            <div className={styles.statLabel}>Pending</div>
+            <div className={styles.statValue}>{getProductCount('pending')}</div>
+          </div>
+          <div className={`${styles.statCard} ${styles.approved}`}>
+            <div className={styles.statLabel}>Approved</div>
+            <div className={styles.statValue}>{getProductCount('approved')}</div>
+          </div>
+          <div className={`${styles.statCard} ${styles.rejected}`}>
+            <div className={styles.statLabel}>Rejected</div>
+            <div className={styles.statValue}>{getProductCount('rejected')}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.productsSection}>
+        {loading ? (
+          <div className={styles.loading}>
+            <div className={styles.spinner}></div>
+          </div>
+        ) : products.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyText}>
+              No {filter !== 'all' ? filter : ''} products found
+            </div>
+          </div>
+        ) : (
+          <div className={styles.productsGrid}>
+            {products.map((product) => (
+              <ProductApprovalCard
+                key={product.id}
+                product={product}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                processing={processing}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showRejectDialog && (
+        <RejectDialog
+          product={selectedProduct}
+          onConfirm={confirmReject}
+          onCancel={() => {
+            setShowRejectDialog(false);
+            setSelectedProduct(null);
+          }}
+          processing={processing}
+        />
+      )}
+    </div>
+  );
+}
+
+===========================================
+FILE 2: components/ProductApprovalCard.jsx
+===========================================
+
+import { useState } from 'react';
+import styles from '@/styles/ProductCard.module.css';
+
+export default function ProductApprovalCard({ product, onApprove, onReject, processing }) {
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const images = Array.isArray(product.images) 
+    ? product.images 
+    : typeof product.images === 'string' && product.images 
+      ? [product.images] 
+      : [];
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.imageContainer}>
+        {images.length > 0 ? (
+          <>
+            <img
+              src={images[currentImageIndex]}
+              alt={product.title}
+              className={styles.image}
+            />
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={prevImage}
+                  className={`${styles.imageNav} ${styles.prev}`}
+                >
+                  ←
+                </button>
+                <button
+                  onClick={nextImage}
+                  className={`${styles.imageNav} ${styles.next}`}
+                >
+                  →
+                </button>
+                <div className={styles.imageDots}>
+                  {images.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`${styles.dot} ${
+                        index === currentImageIndex ? styles.active : ''
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div className={styles.noImage}>No Image</div>
+        )}
+        
+        <div className={`${styles.statusBadge} ${styles[product.status || 'pending']}`}>
+          {(product.status || 'UNKNOWN').toUpperCase()}
+        </div>
+      </div>
+
+      <div className={styles.content}>
+        <h3 className={styles.title}>{product.title}</h3>
+
+        <div className={styles.priceContainer}>
+          <span className={styles.price}>PKR {product.price}</span>
+          {product.actualPrice && product.actualPrice !== product.price && (
+            <span className={styles.actualPrice}>PKR {product.actualPrice}</span>
+          )}
+        </div>
+
+        <div className={styles.category}>{product.category}</div>
+
+        <div className={`${styles.description} ${!showFullDescription ? styles.clamped : ''}`}>
+          {product.description}
+        </div>
+        {product.description && product.description.length > 150 && (
+          <button
+            onClick={() => setShowFullDescription(!showFullDescription)}
+            className={styles.showMoreButton}
+          >
+            {showFullDescription ? 'Show less' : 'Show more'}
+          </button>
+        )}
+
+        <div className={styles.section}>
+          <div className={styles.sectionLabel}>Seller</div>
+          <div className={styles.sectionValue}>{product.sellerName || 'Unknown'}</div>
+          <div className={styles.sectionSubValue}>
+            ID: {product.sellerId?.substring(0, 8)}...
+          </div>
+        </div>
+
+        {product.isCoStoreProduct && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Co-Seller Store</div>
+            <div className={styles.sectionValue}>{product.coStoreName}</div>
+          </div>
+        )}
+
+        {product.minDealPrice > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Minimum Deal Price</div>
+            <div className={styles.sectionValue}>PKR {product.minDealPrice}</div>
+          </div>
+        )}
+
+        <div className={styles.timestamp}>
+          Uploaded: {formatDate(product.createdAt)}
+        </div>
+
+        {product.status === 'rejected' && product.rejectionReason && (
+          <div className={styles.rejectionBox}>
+            <div className={styles.rejectionLabel}>Rejection Reason:</div>
+            <div className={styles.rejectionReason}>{product.rejectionReason}</div>
+          </div>
+        )}
+
+        {product.status === 'pending' && (
+          <div className={styles.actions}>
+            <button
+              onClick={() => onApprove(product.id)}
+              disabled={processing}
+              className={`${styles.button} ${styles.approveButton}`}
+            >
+              ✓ Approve
+            </button>
+            <button
+              onClick={() => onReject(product)}
+              disabled={processing}
+              className={`${styles.button} ${styles.rejectButton}`}
+            >
+              ✗ Reject
+            </button>
+          </div>
+        )}
+
+        {product.status === 'approved' && (
+          <div className={styles.statusBox}>
+            <div className={styles.statusText}>✓ Approved</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+===========================================
+FILE 3: components/RejectDialog.jsx
+===========================================
+
+import { useState } from 'react';
+import styles from '@/styles/RejectDialog.module.css';
+
+export default function RejectDialog({ product, onConfirm, onCancel, processing }) {
+  const [reason, setReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
+
+  const predefinedReasons = [
+    'Poor image quality',
+    'Incomplete product information',
+    'Inappropriate content',
+    'Misleading description',
+    'Incorrect pricing',
+    'Prohibited item',
+    'Duplicate product',
+    'Other (specify below)'
+  ];
+
+  const handleConfirm = () => {
+    const finalReason = reason === 'Other (specify below)' ? customReason : reason;
+    
+    if (!finalReason.trim()) {
+      alert('Please select or enter a rejection reason');
+      return;
+    }
+    
+    onConfirm(finalReason);
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.dialog}>
+        <div className={styles.header}>
+          <h2 className={styles.title}>Reject Product</h2>
+          <p className={styles.subtitle}>
+            Please provide a reason for rejecting this product
+          </p>
+        </div>
+
+        <div className={styles.productInfo}>
+          <div className={styles.productContent}>
+            {product.images && product.images[0] && (
+              <img
+                src={Array.isArray(product.images) ? product.images[0] : product.images}
+                alt={product.title}
+                className={styles.productImage}
+              />
+            )}
+            <div className={styles.productDetails}>
+              <div className={styles.productTitle}>{product.title}</div>
+              <div className={styles.productPrice}>PKR {product.price}</div>
+              <div className={styles.productSeller}>
+                Seller: {product.sellerName}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.reasonSection}>
+          <label className={styles.label}>Select Reason *</label>
+          <div className={styles.reasonList}>
+            {predefinedReasons.map((r) => (
+              <label key={r} className={styles.reasonOption}>
+                <input
+                  type="radio"
+                  name="reason"
+                  value={r}
+                  checked={reason === r}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <span className={styles.reasonText}>{r}</span>
+              </label>
+            ))}
+          </div>
+
+          {reason === 'Other (specify below)' && (
+            <div className={styles.customReasonContainer}>
+              <label className={styles.label}>Custom Reason *</label>
+              <textarea
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="Enter custom rejection reason..."
+                className={styles.textarea}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className={styles.actions}>
+          <button
+            onClick={onCancel}
+            disabled={processing}
+            className={`${styles.button} ${styles.cancelButton}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={processing || !reason}
+            className={`${styles.button} ${styles.confirmButton}`}
+          >
+            {processing ? 'Rejecting...' : 'Confirm Reject'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+===========================================
+FILE 4: lib/firebase.js
+===========================================
+
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+};
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
+export { db };
+
+===========================================
+FILE 5: .env.local
+===========================================
+
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+
+===========================================
+FILE 6: styles/ProductApproval.module.css
+===========================================
+
+(CSS code already provided in ProductApproval.module.css file)
+
+===========================================
+FILE 7: styles/ProductCard.module.css
+===========================================
+
+(CSS code already provided in ProductCard.module.css file)
+
+===========================================
+FILE 8: styles/RejectDialog.module.css
+===========================================
+
+(CSS code already provided in RejectDialog.module.css file)
+
+===========================================
+SETUP COMMANDS
+===========================================
+
+# 1. Create Next.js project
+npx create-next-app@latest my-dashboard
+cd my-dashboard
+
+# 2. Install Firebase
+npm install firebase
+
+# 3. Create folders
+mkdir pages\products
+mkdir components
+mkdir styles
+mkdir lib
+
+# 4. Copy all files from above
+
+# 5. Setup .env.local with Firebase credentials
+
+# 6. Run development server
+npm run dev
+
+# 7. Open browser
+http://localhost:3000/products/approval
+
+===========================================
+END OF FILE
+===========================================

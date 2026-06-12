@@ -1,0 +1,29 @@
+# OrdersViewModel.kt Fix
+
+## Problem:
+Functions `cancelOrderWithRefund()`, `shouldAutoApproveRefund()`, and `processRefundByPaymentMethod()` are OUTSIDE the class (after line 702).
+
+## Solution:
+Delete everything from line 704 to end of file.
+
+The class already ends at line 702 with:
+```
+            }
+        }
+    }
+}
+```
+
+All the functions after line 704 should be DELETED because:
+1. They are duplicates
+2. They are outside the class
+3. The `cancelOrder()` function already exists inside the class
+
+## Steps:
+1. Open OrdersViewModel.kt
+2. Go to line 704
+3. Delete everything from line 704 to end
+4. Save file
+5. Build will succeed
+
+The file should end at line 702 with the closing brace of the OrdersViewModel class.

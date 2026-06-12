@@ -1,0 +1,181 @@
+/* Reject Dialog Styles */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.dialog {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 28rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.productInfo {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.productContent {
+  display: flex;
+  gap: 1rem;
+}
+
+.productImage {
+  width: 5rem;
+  height: 5rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+.productDetails {
+  flex: 1;
+}
+
+.productTitle {
+  font-weight: 500;
+  color: #111827;
+}
+
+.productPrice {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.productSeller {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+.reasonSection {
+  padding: 1.5rem;
+}
+
+.label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.75rem;
+}
+
+.reasonList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reasonOption {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reasonOption:hover {
+  background-color: #f9fafb;
+}
+
+.reasonOption input[type="radio"] {
+  margin-right: 0.75rem;
+}
+
+.reasonText {
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.customReasonContainer {
+  margin-top: 1rem;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.actions {
+  padding: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.button {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  font-size: 0.875rem;
+}
+
+.cancelButton {
+  background-color: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background-color: #f3f4f6;
+}
+
+.confirmButton {
+  background-color: #ef4444;
+  color: white;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

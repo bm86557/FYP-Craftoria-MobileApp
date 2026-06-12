@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function - Check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper function - Check if user is verified seller
+    function isVerifiedSeller() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'VERIFIED';
+    }
+    
+    // Helper function - Check if user owns the product
+    function isProductOwner(productData) {
+      return request.auth != null && request.auth.uid == productData.sellerId;
+    }
+    
+    // Products Collection Rules
+    match /data/stock/products/{productId} {
+      
+      // READ RULES
+      allow read: if true; // Everyone can read (but app filters by status)
+      
+      // CREATE RULES - Only verified sellers can create products
+      allow create: if request.auth != null &&
+                       isVerifiedSeller() &&
+                       request.auth.uid == request.resource.data.sellerId &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.rejectionReason == null &&
+                       request.resource.data.reviewedBy == null;
+      
+      // UPDATE RULES
+      allow update: if request.auth != null && (
+        // Case 1: Admin can approve/reject products
+        (isAdmin() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectionReason', 'reviewedBy', 'reviewedAt']) &&
+         request.resource.data.status in ['approved', 'rejected'])
+        ||
+        // Case 2: Seller can update own product (but NOT status, rejectionReason, reviewedBy, reviewedAt)
+        (isProductOwner(resource.data) &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'rejectionReason', 'reviewedBy', 'reviewedAt', 'sellerId']) &&
+         request.resource.data.sellerId == resource.data.sellerId)
+      );
+      
+      // DELETE RULES - Only seller can delete own products OR admin can delete
+      allow delete: if request.auth != null && 
+                       (isProductOwner(resource.data) || isAdmin());
+    }
+    
+    // Users Collection Rules (for role and verification checks)
+    match /users/{userId} {
+      // Anyone can read user profiles
+      allow read: if true;
+      
+      // Users can only update their own profile (but not role or verificationStatus)
+      allow update: if request.auth != null && 
+                       request.auth.uid == userId &&
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'verificationStatus', 'verifiedAt', 'verificationRejectionReason']);
+      
+      // Only admins can update role and verificationStatus
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verificationStatus', 'verifiedAt', 'verificationRejectionReason', 'reviewedBy']);
+    }
+    
+    // Co-Seller Stores Rules
+    match /coSellerStores/{storeId} {
+      // Anyone can read stores
+      allow read: if true;
+      
+      // Only verified sellers can create stores
+      allow create: if request.auth != null &&
+                       isVerifiedSeller() &&
+                       request.auth.uid == request.resource.data.ownerId;
+      
+      // Only store owner can update
+      allow update: if request.auth != null &&
+                       request.auth.uid == resource.data.ownerId;
+      
+      // Only store owner can delete
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.ownerId;
+    }
+    
+    // Orders Collection Rules
+    match /orders/{orderId} {
+      // Users can read their own orders (buyer or seller)
+      allow read: if request.auth != null && 
+                     (request.auth.uid == resource.data.buyerId || 
+                      request.auth.uid == resource.data.sellerId);
+      
+      // Buyers can create orders
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.buyerId;
+      
+      // Seller can update order status
+      allow update: if request.auth != null &&
+                       request.auth.uid == resource.data.sellerId;
+    }
+    
+    // Chats Collection Rules
+    match /chats/{chatId} {
+      // Users can read chats they're part of
+      allow read: if request.auth != null && 
+                     (request.auth.uid == resource.data.buyerId || 
+                      request.auth.uid == resource.data.sellerId);
+      
+      // Users can create chats
+      allow create: if request.auth != null &&
+                       (request.auth.uid == request.resource.data.buyerId || 
+                        request.auth.uid == request.resource.data.sellerId);
+      
+      // Users can update chats they're part of
+      allow update: if request.auth != null && 
+                       (request.auth.uid == resource.data.buyerId || 
+                        request.auth.uid == resource.data.sellerId);
+    }
+    
+    // Negotiations Collection Rules
+    match /negotiations/{negotiationId} {
+      // Users can read negotiations they're part of
+      allow read: if request.auth != null && 
+                     (request.auth.uid == resource.data.buyerId || 
+                      request.auth.uid == resource.data.sellerId);
+      
+      // Users can create negotiations
+      allow create: if request.auth != null;
+      
+      // Users can update negotiations they're part of
+      allow update: if request.auth != null && 
+                       (request.auth.uid == resource.data.buyerId || 
+                        request.auth.uid == resource.data.sellerId);
+    }
+    
+    // Wallets Collection Rules
+    match /wallets/{userId} {
+      // Users can only read their own wallet
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Only system/admin can update wallets
+      allow update: if isAdmin();
+    }
+    
+    // Favourites Collection Rules
+    match /users/{userId}/favourites/{productId} {
+      // Users can read their own favourites
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can add/remove their own favourites
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
